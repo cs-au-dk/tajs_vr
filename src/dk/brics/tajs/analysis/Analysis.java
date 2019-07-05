@@ -18,6 +18,7 @@ package dk.brics.tajs.analysis;
 
 import dk.brics.tajs.blendedanalysis.solver.BlendedAnalysisManager;
 import dk.brics.tajs.flowgraph.FlowGraph;
+import dk.brics.tajs.refinement.instantiations.forwards_backwards.TAJSForwardsAPI;
 import dk.brics.tajs.lattice.AnalysisLatticeElement;
 import dk.brics.tajs.lattice.CallEdge;
 import dk.brics.tajs.lattice.Context;
@@ -56,12 +57,15 @@ public final class Analysis implements IAnalysis<State, Context, CallEdge, IAnal
 
     private ITypeTester<Context> ttr;
 
+    private final TAJSForwardsAPI forwards;
+
     /**
      * Constructs a new analysis object.
      */
     public Analysis(IAnalysisMonitoring monitoring, SolverSynchronizer sync, Transfer transfer, ITypeTester<Context> ttr) {
         unsoundness = new Unsoundness(Options.get().getUnsoundness(), monitoring::addMessageInfo);
         this.monitoring = monitoring;
+        this.forwards = new TAJSForwardsAPI();
         initial_state_builder = new InitialStateBuilder();
         this.transfer = transfer;
         this.ttr = ttr;
@@ -135,6 +139,13 @@ public final class Analysis implements IAnalysis<State, Context, CallEdge, IAnal
         monitoring.setSolverInterface(c);
         if (Options.get().isBlendedAnalysisEnabled() || Options.get().isIgnoreUnreachedEnabled())
             blended_analysis_manager.setSolverInterface(c);
+        if (forwards != null)
+            forwards.setSolverInterface(c);
+    }
+
+    @Override
+    public TAJSForwardsAPI getForwards() {
+        return forwards;
     }
 
     /**

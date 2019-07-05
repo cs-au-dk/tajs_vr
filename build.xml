@@ -51,10 +51,10 @@
         <echo message="Classpath is ${cp}"/>
         -->
         <mkdir dir="antbuild"/>
-        <javac srcdir="src" includes="**" destdir="antbuild" optimize="${optimize}"
+        <javac target="1.8" srcdir="src:src-forwards-backwards-api" includes="**" destdir="antbuild" optimize="${optimize}"
                 debug="${debug}" includeantruntime="false">
             <classpath refid="classpath" />
-            <compilerarg line="-encoding ISO-8859-1 -Xlint:deprecation" compiler="modern" />
+            <!--<compilerarg line="-encoding ISO-8859-1 -Xlint:deprecation" compiler="modern" />-->
             <!--
             <compilerarg line="-Xlint -Xlint:-serial -Xlint:-path" compiler="modern" />
             -->

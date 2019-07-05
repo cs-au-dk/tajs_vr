@@ -19,6 +19,7 @@ package dk.brics.tajs.solver;
 import dk.brics.tajs.blendedanalysis.solver.BlendedAnalysisManager;
 import dk.brics.tajs.flowgraph.FlowGraph;
 import dk.brics.tajs.typetesting.ITypeTester;
+import forwards_backwards_api.Forwards;
 
 /**
  * Interface for analyses on flow graphs.
@@ -78,4 +79,9 @@ public interface IAnalysis<StateType extends IState<StateType, ContextType, Call
      * Returns the type tester, or null if not available.
      */
     ITypeTester<ContextType> getTypeTester();
+
+    /**
+     * Returns the forwards analysis api used for refinements
+     */
+    Forwards getForwards();
 }

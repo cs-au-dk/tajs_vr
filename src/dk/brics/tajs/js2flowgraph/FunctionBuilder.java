@@ -109,6 +109,7 @@ import dk.brics.tajs.flowgraph.syntaticinfo.DynamicProperty;
 import dk.brics.tajs.flowgraph.syntaticinfo.StaticProperty;
 import dk.brics.tajs.flowgraph.syntaticinfo.SyntacticReference;
 import dk.brics.tajs.flowgraph.syntaticinfo.Variable;
+import dk.brics.tajs.refinement.instantiations.forwards_backwards.RefinerOptions;
 import dk.brics.tajs.js2flowgraph.ASTInfo.LiteralTree;
 import dk.brics.tajs.js2flowgraph.ASTInfo.LoopTree;
 import dk.brics.tajs.js2flowgraph.FunctionAndBlockManager.SessionKey;
@@ -431,7 +432,7 @@ public class FunctionBuilder extends DefaultDispatchingParseTreeAuxVisitor<Trans
         switch (target.type) {
             case Variable:
                 write = new WriteVariableNode(valueRegister, target.asVariable().name, location);
-                break;
+                syntacticInformationCollector.registerVariableWrite(env.getFunction(), target.asVariable().name);                break;
             case StaticProperty:
                 StaticProperty staticProperty = target.asStaticProperty();
                 write = new WritePropertyNode(staticProperty.baseRegister, staticProperty.propertyName, valueRegister, Kind.ORDINARY, false, location);
@@ -454,6 +455,7 @@ public class FunctionBuilder extends DefaultDispatchingParseTreeAuxVisitor<Trans
         switch (target.type) {
             case Variable:
                 read = new ReadVariableNode(target.asVariable().name, env.getResultRegister(), env.getBaseRegister(), target.location);
+                syntacticInformationCollector.registerVariableRead(env.getFunction(), env.getResultRegister(), target.asVariable().name);
                 break;
             case StaticProperty:
                 StaticProperty staticProperty = target.asStaticProperty();
@@ -1086,6 +1088,9 @@ public class FunctionBuilder extends DefaultDispatchingParseTreeAuxVisitor<Trans
             unsupportedLanguageFeature(tree, "ES6 arrow functions");
         }
         String name = tree.name == null ? null : tree.name.value;
+        if (tree.kind == FunctionDeclarationTree.Kind.EXPRESSION && RefinerOptions.get().isSpecializeImpreciseClosureVariablesWithOnlyOneWrite()) {
+            env = env.makeAppendBlock(makeSuccessorBasicBlock(env.getAppendBlock(), functionAndBlocksManager));
+        }
         Function function = processFunctionDeclaration(tree.kind, name, tree.formalParameterList, tree.functionBody, env, makeSourceLocation(tree), getSource(tree));
         syntacticInformationCollector.registerFunction(function, tree, astInfo);
         return TranslationResult.makeAppendBlock(env.getAppendBlock());
@@ -1578,6 +1583,7 @@ public class FunctionBuilder extends DefaultDispatchingParseTreeAuxVisitor<Trans
             syntacticInformationCollector.registerVariableDeclaration(declaration, variableLocation, sourceLocationMaker);
 
             addNodeToBlock(new WriteVariableNode(rhsEnv.getResultRegister(), variableName, variableLocation), processed.getAppendBlock(), env.makeStatementLevel(true));
+            syntacticInformationCollector.registerVariableWrite(env.getFunction(), variableName);
         } else {
             processed = TranslationResult.makeAppendBlock(env.getAppendBlock());
         }

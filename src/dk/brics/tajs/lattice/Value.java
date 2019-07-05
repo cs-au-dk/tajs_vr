@@ -314,7 +314,7 @@ public class Value implements Undef, Null, Bool, Num, Str, PKeys, DeepImmutable 
     /**
      * Constructs a shallow clone of the given value object.
      */
-   protected Value(Value v) {
+    protected Value(Value v) {
         flags = v.flags;
         num = v.num;
         str = v.str;
@@ -331,7 +331,7 @@ public class Value implements Undef, Null, Bool, Num, Str, PKeys, DeepImmutable 
     /**
      * Put the value into canonical form.
      */
-    protected static Value canonicalize(Value v) {
+    public static Value canonicalize(Value v) {
         if (Options.get().isDebugOrTestEnabled()) { // checking representation invariants
             String msg = null;
             if ((v.flags & (STR_OTHERNUM | STR_IDENTIFIERPARTS | STR_OTHER)) != 0 && v.str != null)
@@ -4623,5 +4623,20 @@ public class Value implements Undef, Null, Bool, Num, Str, PKeys, DeepImmutable 
                 excluded_strings = newSet(excluded_strings);
             excluded_strings.add(s);
         }
+    }
+
+    /**
+     * Computes the meet of two values.
+     */
+    public Value meet(Value other) {
+        return restrictToStrictEquals(other);
+    }
+
+    /**
+     * Checks if two values have a non-bottom meet.
+     * (Generalization of the isMaybeXYZ methods in this class.)
+     */
+    public boolean isMaybe(Value other){
+        return !restrictToStrictEquals(other).isNone();
     }
 }

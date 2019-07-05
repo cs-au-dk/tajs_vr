@@ -325,6 +325,9 @@ public class KnownUnsoundnesses {
                         make("benchmarks/tajs/src/jquery/libraries/jquery-1.10.js", 381, 22),
                         make("benchmarks/tajs/src/jquery/libraries/jquery-1.11.js", 242, 22),
 
+                        make("../../test-resources/src/jquery/libraries/jquery-1.10.js", 381, 22),
+                        make("test-resources/src/jquery/libraries/jquery-1.10.js", 381, 22),
+
                         // Fails due to wrong receiver, for a function called from a function defined by new Function
                         make("benchmarks/tajs/src/underscore/test-suite/utility/test180.html", 14, 18),
                         make("benchmarks/tajs/src/underscore/test-suite/utility/test180.html", 17, 25),
@@ -438,6 +441,16 @@ public class KnownUnsoundnesses {
                         make("benchmarks/tajs/src/jsai2015benchmarks/buckets_many_extra_prints.js", 1905, 22),
                         make("benchmarks/tajs/src/jsai2015benchmarks/buckets_many_extra_prints.js", 2052, 33),
 
+                        make("../../test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 3, 2),
+                        make("../../test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 36, 29),
+                        make("../../test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 1905, 22),
+                        make("../../test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 2052, 33),
+
+                        make("test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 3, 2),
+                        make("test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 36, 29),
+                        make("test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 1905, 22),
+                        make("test-resources/src/jsai/jsai2015/buckets_many_extra_prints.js", 2052, 33),
+
                         // this-mismatch between TAJS/Jalangi (!!??)
                         make("out/temp-sources/TestUneval.uneval_stackOverflowRegression.js", 2, 2),
 
@@ -453,8 +466,15 @@ public class KnownUnsoundnesses {
                         // Logger calls toString, but it is not called when running the uninstrumented file
                         make("benchmarks/tajs/src/popular-libs/prototype/prototype-1.7.2-modified/prototype.js", 142, 38),
                         make("benchmarks/tajs/src/popular-libs/prototype/prototype-1.7.2-modified/prototype.js", 142, 18),
-                        make("benchmarks/tajs/src/popular-libs/prototype/prototype-1.7.2-modified/prototype.js", 142, 59)
+                        make("benchmarks/tajs/src/popular-libs/prototype/prototype-1.7.2-modified/prototype.js", 142, 59),
 
+                        make("../../test-resources/src/prototype/prototype.js", 142, 38),
+                        make("../../test-resources/src/prototype/prototype.js", 142, 18),
+                        make("../../test-resources/src/prototype/prototype.js", 142, 59),
+
+                        make("test-resources/src/prototype/prototype.js", 142, 38),
+                        make("test-resources/src/prototype/prototype.js", 142, 18),
+                        make("test-resources/src/prototype/prototype.js", 142, 59)
                 )
         );
     }
@@ -499,7 +519,7 @@ public class KnownUnsoundnesses {
         Path path = PathAndURLUtils.toPath(sourceLocation.getLocation(), false);
         Optional<Path> relativeToTAJS = PathAndURLUtils.getRelativeToTAJS(path);
         if (!relativeToTAJS.isPresent()) {
-            return false;
+            return set.contains(new SimpleSourceLocation(sourceLocation.getLineNumber(), sourceLocation.getColumnNumber(), PathAndURLUtils.getRelativeToWorkingDirectory(path)));
         }
         return set.contains(new SimpleSourceLocation(sourceLocation.getLineNumber(), sourceLocation.getColumnNumber(), relativeToTAJS.get()));
     }

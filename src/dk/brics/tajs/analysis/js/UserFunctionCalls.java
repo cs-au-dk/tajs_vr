@@ -121,6 +121,9 @@ public class UserFunctionCalls {
         // TODO: join function objects (p.72)? (if same n and same scope)
         Context functionHeapContext = c.getAnalysis().getContextSensitivityStrategy().makeFunctionHeapContext(fun, c);
         ObjectLabel fn = ObjectLabel.make(fun, functionHeapContext);
+        if (c.getState().getContext().getPropertyReadSpecialization() != null) {
+            fn = fn.makeSpecialization(c.getState().getContext().getPropertyReadSpecialization());
+        }
 
         PropVarOperations pv = c.getAnalysis().getPropVarOperations();
         // 13.2 step 2 and 3

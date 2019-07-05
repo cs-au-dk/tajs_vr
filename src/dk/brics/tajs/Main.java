@@ -53,6 +53,7 @@ import dk.brics.tajs.options.Options;
 import dk.brics.tajs.options.TAJSEnvironmentConfig;
 import dk.brics.tajs.preprocessing.Babel;
 import dk.brics.tajs.solver.SolverSynchronizer;
+import dk.brics.tajs.solver.refinement.QueryManager;
 import dk.brics.tajs.typetesting.ITypeTester;
 import dk.brics.tajs.util.AnalysisException;
 import dk.brics.tajs.util.Canonicalizer;
@@ -62,6 +63,8 @@ import dk.brics.tajs.util.Loader;
 import dk.brics.tajs.util.Pair;
 import dk.brics.tajs.util.PathAndURLUtils;
 import dk.brics.tajs.util.Strings;
+import forwards_backwards_api.Formula;
+import forwards_backwards_api.Refiner;
 import net.htmlparser.jericho.Source;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
@@ -139,12 +142,12 @@ public class Main {
     /**
      * Reads the input and prepares an analysis object, using the default monitoring.
      */
-    public static Analysis init(String[] args, SolverSynchronizer sync, Transfer transfer) throws AnalysisException {
+    public static <T extends Formula> Analysis init(String[] args, SolverSynchronizer sync, Transfer transfer, Refiner<T> refiner) throws AnalysisException {
         OptionValues options = new OptionValues();
         try {
             options.parse(args);
             options.checkConsistency();
-            return init(options, null, sync, transfer, null);
+            return init(options, null, sync, transfer, null, refiner);
         } catch (CmdLineException e) {
             showHeader();
             log.info(e.getMessage() + "\n");
@@ -160,7 +163,7 @@ public class Main {
      * @return analysis object, null if invalid input
      * @throws AnalysisException if internal error
      */
-    public static Analysis init(OptionValues options, IAnalysisMonitoring monitoring, SolverSynchronizer sync, Transfer transfer, ITypeTester<Context> ttr) throws AnalysisException {
+    public static <T extends Formula> Analysis init(OptionValues options, IAnalysisMonitoring monitoring, SolverSynchronizer sync, Transfer transfer, ITypeTester<Context> ttr, Refiner<T> refiner) throws AnalysisException {
         checkValidOptions(options);
         Options.set(options);
         TAJSEnvironmentConfig.init();
@@ -244,6 +247,9 @@ public class Main {
 
         leavePhase(AnalysisPhase.INITIALIZATION, analysis.getMonitoring());
 
+        if (refiner != null)
+            QueryManager.MultiQueryManager.init(refiner, analysis.getForwards(), monitoring);
+
         return analysis;
     }
 
@@ -251,14 +257,14 @@ public class Main {
      * Reads the input and prepares an analysis object, using the default monitoring and transfer functions.
      */
     public static Analysis init(String[] args, SolverSynchronizer sync) throws AnalysisException {
-        return init(args, sync, new Transfer());
+        return init(args, sync, new Transfer(), null);
     }
 
     /**
      * Reads the input and prepares an analysis object, using the default transfer functions.
      */
     public static Analysis init(OptionValues options, IAnalysisMonitoring monitoring, SolverSynchronizer sync) throws AnalysisException {
-        return init(options, monitoring, sync, new Transfer(), null);
+        return init(options, monitoring, sync, new Transfer(), null, null);
     }
 
     private static void checkValidOptions(OptionValues options) {

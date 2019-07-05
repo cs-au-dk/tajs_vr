@@ -28,8 +28,6 @@ import java.util.function.Supplier;
 
 /**
  * Computes the intermediary state between nodes in a block.
- *
- * See the TAJS-Thresher project: TAJSForwardsAPI
  */
 public class IntermediaryStateComputer {
 

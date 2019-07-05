@@ -202,4 +202,17 @@ public class SyntacticAnalysis {
     public void registerDeclaredAccessor(ParseTree accessorTree, SourceLocation sourceLocation, SourceLocation.SourceLocationMaker sourceLocationMaker) {
         valueLogLocationRemapping.registerDeclaredAccessor(accessorTree, sourceLocation, sourceLocationMaker);
     }
+
+    public void registerVariableWrite(Function function, String varname) {
+        Function currentFunction = function;
+        while (currentFunction != null && !currentFunction.getVariableNames().contains(varname) && !currentFunction.getParameterNames().contains(varname)) {
+            rawSyntacticInformation.registerVariableWriteInnerFunction(function, varname);
+            currentFunction = currentFunction.getOuterFunction();
+        }
+        rawSyntacticInformation.registerVariableWriteInFunction(function, varname);
+    }
+
+    public void registerVariableRead(Function function, int reg, String variableName) {
+        rawSyntacticInformation.registerVariableRead(function, reg, variableName);
+    }
 }

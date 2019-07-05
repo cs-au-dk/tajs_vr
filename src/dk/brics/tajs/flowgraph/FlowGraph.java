@@ -299,6 +299,9 @@ public class FlowGraph {
         this.rawSyntacticInformation.getFunctionClosureVariables().putAll(rawSyntacticInformation.getFunctionClosureVariables());
         this.rawSyntacticInformation.getFunctionClosureVariablesTransitively().putAll(rawSyntacticInformation.getFunctionClosureVariablesTransitively());
         this.rawSyntacticInformation.getFunctionsWithThisReference().addAll(rawSyntacticInformation.getFunctionsWithThisReference());
+        this.rawSyntacticInformation.getVariableWritesInFunction().countAll(rawSyntacticInformation.getVariableWritesInFunction());
+        this.rawSyntacticInformation.getVariableWritesInnerFunction().countAll(rawSyntacticInformation.getVariableWritesInnerFunction());
+        this.rawSyntacticInformation.getVariableReads().putAll(rawSyntacticInformation.getVariableReads());
 
         this.valueLogLocationInformation.getDeclaredAccessorAllocationSites().addAll(valueLogLocationInformation.getDeclaredAccessorAllocationSites());
         this.valueLogLocationInformation.getTajsLocation2jalangiLocation().putAll(valueLogLocationInformation.getTajsLocation2jalangiLocation());

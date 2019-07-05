@@ -48,7 +48,7 @@ public class Babel {
 
     private static final Pattern successPattern = Pattern.compile("Successfully compiled (\\d+) files? with Babel\\.");
 
-    private static final Set<String> supportedFileExtensions = Set.of(".es6", ".js", ".es", ".jsx", ".mjs", "");
+    private static final Set<String> supportedFileExtensions = Stream.of(".es6", ".js", ".es", ".jsx", ".mjs", "").collect(java.util.stream.Collectors.toSet());
 
     /**
      * This method performs babel preprocessing on the files listed in the *files* parameter.

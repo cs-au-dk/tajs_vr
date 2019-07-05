@@ -26,6 +26,8 @@ import dk.brics.tajs.util.Canonicalizer;
 import dk.brics.tajs.util.DeepImmutable;
 
 import javax.annotation.Nonnull;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Label of abstract object.
@@ -44,7 +46,7 @@ public final class ObjectLabel implements DeepImmutable {
     public static ObjectLabel absent_accessor_function;
 
     public static void reset() {
-        absent_accessor_function = make(null, null, null, Kind.FUNCTION, null, false);
+        absent_accessor_function = make(null, null, null, Kind.FUNCTION, null, false, null);
         initial_source = new SourceLocation.SyntheticLocationMaker("<initial state>").makeUnspecifiedPosition();
     }
 
@@ -99,6 +101,8 @@ public final class ObjectLabel implements DeepImmutable {
 
     private final Context heapContext; // for context sensitivity
 
+    private final PropertyReadSpecialization propertyReadSpecialization; // for specialization at a closure function written at dynamic property write
+
     /**
      * Cached hashcode for immutable instance.
      */
@@ -109,7 +113,7 @@ public final class ObjectLabel implements DeepImmutable {
      */
     private String toString;
 
-    private ObjectLabel(HostObject hostobject, AbstractNode node, Function function, Kind kind, Context heapContext, boolean singleton) {
+    private ObjectLabel(HostObject hostobject, AbstractNode node, Function function, Kind kind, Context heapContext, boolean singleton, PropertyReadSpecialization propertyReadSpecialization) {
         this.hostobject = hostobject;
         this.node = node;
         this.function = function;
@@ -124,22 +128,24 @@ public final class ObjectLabel implements DeepImmutable {
         } else {
             this.heapContext = heapContext;
         }
+        this.propertyReadSpecialization = propertyReadSpecialization;
         this.hashcode = (this.hostobject != null ? this.hostobject.toString().hashCode() : 0) +
                 (this.function != null ? this.function.hashCode() : 0) +
                 (this.node != null ? this.node.getIndex() : 0) +
                 (this.singleton ? 123 : 0) +
                 this.heapContext.hashCode() +
-                this.kind.ordinal() * 117; // avoids using enum hashcodes
+                this.kind.ordinal() * 117 + // avoids using enum hashcodes
+                (this.propertyReadSpecialization != null ? this.propertyReadSpecialization.hashCode() : 0);
     }
 
-    public static ObjectLabel make(HostObject hostobject, AbstractNode node, Function function, Kind kind, Context heapContext, boolean singleton){
-        return Canonicalizer.get().canonicalize(new ObjectLabel(hostobject, node, function, kind, heapContext, singleton));
+    public static ObjectLabel make(HostObject hostobject, AbstractNode node, Function function, Kind kind, Context heapContext, boolean singleton, PropertyReadSpecialization propertyReadSpecialization){
+        return Canonicalizer.get().canonicalize(new ObjectLabel(hostobject, node, function, kind, heapContext, singleton, propertyReadSpecialization));
     }
     /**
      * Constructs a new object label for a user defined non-function object.
      */
     public static ObjectLabel make(AbstractNode n, Kind kind) {
-        return make(null, n, null, kind, null, true);
+        return make(null, n, null, kind, null, true, null);
     }
 
     /**
@@ -149,14 +155,14 @@ public final class ObjectLabel implements DeepImmutable {
      * number of concrete objects).
      */
     public static ObjectLabel make(AbstractNode n, Kind kind, Context heapContext) {
-        return make(null, n, null, kind, heapContext, true);
+        return make(null, n, null, kind, heapContext, true, null);
     }
 
     /**
      * Constructs a new object label for a user defined function object.
      */
     public static ObjectLabel make(Function f) {
-        return make(null, null, f, Kind.FUNCTION, null, true);
+        return make(null, null, f, Kind.FUNCTION, null, true, null);
     }
 
     /**
@@ -166,7 +172,7 @@ public final class ObjectLabel implements DeepImmutable {
      * number of concrete objects).
      */
     public static ObjectLabel make(Function f, Context heapContext) {
-        return make(null, null, f, Kind.FUNCTION, heapContext, true);
+        return make(null, null, f, Kind.FUNCTION, heapContext, true, null);
     }
 
     /**
@@ -176,14 +182,14 @@ public final class ObjectLabel implements DeepImmutable {
      * number of concrete objects).
      */
     public static ObjectLabel make(HostObject hostobject, Kind kind) {
-        return make(hostobject, null, null, kind, null, true);
+        return make(hostobject, null, null, kind, null, true, null);
     }
 
     /**
      * Constructs a copy of this object label with the given heap context.
      */
     public ObjectLabel copyWith(Context newHeapContext) {
-        return make(hostobject, node, function, kind, newHeapContext, singleton);
+        return make(hostobject, node, function, kind, newHeapContext, singleton, null);
     }
 
     /**
@@ -252,13 +258,17 @@ public final class ObjectLabel implements DeepImmutable {
         return heapContext;
     }
 
+    public PropertyReadSpecialization getPropertyReadSpecialization() {
+        return propertyReadSpecialization;
+    }
+
     /**
      * Returns the summary object label associated with this singleton object label.
      */
     public ObjectLabel makeSummary() {
         if (!singleton && !Options.get().isRecencyDisabled())
             throw new AnalysisException("Attempt to obtain summary of non-singleton");
-        return make(hostobject, node, function, kind, heapContext, false);
+        return make(hostobject, node, function, kind, heapContext, false, propertyReadSpecialization);
     }
 
     /**
@@ -267,8 +277,16 @@ public final class ObjectLabel implements DeepImmutable {
     public ObjectLabel makeSingleton() {
         if (singleton)
             return this;
-        return make(hostobject, node, function, kind, heapContext, true);
+        return make(hostobject, node, function, kind, heapContext, true, propertyReadSpecialization);
     }
+
+    /**
+     * Returns the specialized property read object label associated with this object label
+     */
+    public ObjectLabel makeSpecialization(PropertyReadSpecialization propertyReadSpecialization) {
+        return make(hostobject, node, function, kind, heapContext, singleton, propertyReadSpecialization);
+    }
+
 
     /**
      * Produces a string representation of this object label.
@@ -296,6 +314,9 @@ public final class ObjectLabel implements DeepImmutable {
             b.append(kind).append("#node").append(node.getIndex());
         }
         b.append(heapContext);
+        if (propertyReadSpecialization != null) {
+            b.append("propReadSpecialization=" + propertyReadSpecialization);
+        }
         toString = b.toString();
         return toString;
     }
@@ -328,7 +349,8 @@ public final class ObjectLabel implements DeepImmutable {
             return false;
         return (hostobject == null || hostobject.equals(x.hostobject)) &&
                 function == x.function && node == x.node &&
-                singleton == x.singleton && kind == x.kind;
+                singleton == x.singleton && kind == x.kind &&
+                Objects.equals(propertyReadSpecialization, x.propertyReadSpecialization);
     }
 
     /**

@@ -42,6 +42,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import static dk.brics.tajs.util.Collections.addAllToMapSet;
+import static dk.brics.tajs.util.Collections.addToMapSet;
 import static dk.brics.tajs.util.Collections.newList;
 import static dk.brics.tajs.util.Collections.newMap;
 import static dk.brics.tajs.util.Collections.newSet;
@@ -75,6 +77,10 @@ public class State implements IState<State, Context, CallEdge> {
     private Obj store_default; // either the none obj (for program entry) or the unknown obj (all other locations)
 
     private boolean writable_store; // for copy-on-write
+
+    private Map<ObjectLabel, Set<ObjectLabel>> specializations; // maps objectlabels to their specializations
+
+    private Map<ObjectLabel, ObjectLabel> generalizations; // maps specialized objectlabels to their generalizations
 
     /**
      * Reusable immutable part of the store.
@@ -137,6 +143,8 @@ public class State implements IState<State, Context, CallEdge> {
         extras = new StateExtras();
         must_reaching_defs = new MustReachingDefs();
         must_equals = new MustEquals();
+        specializations = newMap();
+        generalizations = newMap();
         setToBottom();
         number_of_states_created++;
     }
@@ -196,6 +204,8 @@ public class State implements IState<State, Context, CallEdge> {
 //            x.writable_registers = writable_registers = false;
 //            x.writable_stacked = writable_stacked = false;
 //        }
+        specializations = newMap(x.specializations);
+        generalizations = newMap(x.generalizations);
     }
 
     /**
@@ -521,6 +531,8 @@ public class State implements IState<State, Context, CallEdge> {
         execution_context = new ExecutionContext();
         writable_execution_context = true;
         store_default = Obj.makeNone();
+        specializations.clear();
+        generalizations.clear();
     }
 
 //    /**
@@ -888,6 +900,18 @@ public class State implements IState<State, Context, CallEdge> {
         changed |= must_reaching_defs.propagate(s.must_reaching_defs);
         changed |= must_equals.propagate(s.must_equals);
         changed |= summarized.join(s.summarized);
+        for (Map.Entry<ObjectLabel, Set<ObjectLabel>> spec : s.specializations.entrySet()) {
+            if (!(specializations.containsKey(spec.getKey()) && specializations.get(spec.getKey()).containsAll(spec.getValue()))) {
+                addAllToMapSet(specializations, spec.getKey(), spec.getValue());
+                changed = true;
+            }
+        }
+        for (Map.Entry<ObjectLabel, ObjectLabel> generalization : s.generalizations.entrySet()) {
+            if (!(generalizations.containsKey(generalization.getKey()) && generalizations.get(generalization.getKey()).equals(generalization.getValue()))) {
+                generalizations.put(generalization.getKey(), generalization.getValue());
+                changed = true;
+            }
+        }
         if (!funentry) {
             for (int i = 0; i < registers.size() || i < s.registers.size(); i++) {
                 Value v1 = i < registers.size() ? registers.get(i) : null;
@@ -1931,6 +1955,9 @@ public class State implements IState<State, Context, CallEdge> {
                 if (!((objlabel.isSingleton() && summarized.isDefinitelySummarized(objlabel)) ||
                         (noneAtEntry(objlabel, entry_state) && (objlabel.isSingleton() || (summarized.isMaybeSummarized(objlabel.makeSingleton()) && noneAtEntry(objlabel.makeSingleton(), entry_state))))))
                     live.add(objlabel);
+                if (generalizations.containsKey(objlabel))
+                    live.add(generalizations.get(objlabel));
+                specializations.getOrDefault(objlabel, newSet()).forEach(live::add);
             }
         LinkedHashSet<ObjectLabel> pending = new LinkedHashSet<>(live);
         while (!pending.isEmpty()) {
@@ -2191,5 +2218,18 @@ public class State implements IState<State, Context, CallEdge> {
     @Override
     public boolean transformInverse(CallEdge edge, BasicBlock callee, Context callee_context) {
         return false;
+    }
+
+    public Set<ObjectLabel> getSpecializations(ObjectLabel objlabel) {
+        return specializations.getOrDefault(objlabel, newSet());
+    }
+
+    public void addSpecialization(ObjectLabel generalization, ObjectLabel specialization) {
+        addToMapSet(specializations, generalization, specialization);
+        generalizations.put(specialization, generalization);
+    }
+
+    public ObjectLabel getGeneralization(ObjectLabel objectLabel) {
+        return generalizations.get(objectLabel);
     }
 }

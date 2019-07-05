@@ -233,10 +233,17 @@ public class CallGraph<StateType extends IState<StateType, ContextType, CallEdge
      * Returns the specified map from (callee entry, edge context) to call edge info.
      */
     public Map<BlockAndContext<ContextType>, CallEdgeType> getCallEdges(AbstractNode caller, ContextType caller_context) {
-        Map<BlockAndContext<ContextType>, CallEdgeType> mb = call_edge_info.get(new NodeAndContext<>(caller, caller_context));
+        Map<BlockAndContext<ContextType>, CallEdgeType> mb = getCallEdges_unsafe(caller, caller_context);
         if (mb == null)
             throw new AnalysisException("No such edge!?");
         return mb;
+    }
+
+    /**
+     * Returns the specified map from (callee entry, edge context) to call edge info.
+     */
+    public Map<BlockAndContext<ContextType>, CallEdgeType> getCallEdges_unsafe(AbstractNode caller, ContextType caller_context) {
+        return call_edge_info.get(new NodeAndContext<>(caller, caller_context));
     }
 
     public int size() {

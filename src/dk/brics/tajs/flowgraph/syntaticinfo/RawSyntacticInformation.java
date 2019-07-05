@@ -21,9 +21,12 @@ import dk.brics.tajs.flowgraph.AbstractNode;
 import dk.brics.tajs.flowgraph.Function;
 import dk.brics.tajs.flowgraph.jsnodes.CallNode;
 import dk.brics.tajs.flowgraph.jsnodes.IfNode;
+import dk.brics.tajs.monitoring.inspector.util.OccurenceCountingMap;
 import dk.brics.tajs.util.AnalysisException;
+import dk.brics.tajs.util.Pair;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static dk.brics.tajs.util.Collections.addAllToMapSet;
@@ -60,6 +63,12 @@ public class RawSyntacticInformation {
 
     private final Map<Function, Set<String>> functionClosureVariables;
 
+    private final Map<Pair<Function, Integer>, String> variableNameFromFuncAndReg;
+
+    private final OccurenceCountingMap<Pair<Function, String>> numberOfWritesToVariablesInFunction;
+
+    private final OccurenceCountingMap<Pair<Function, String>> numberOfWritesToVariablesInnerFunctions;
+
     private final Set<Function> functionsWithThisReference;
 
     private final Map<Function, Set<String>> functionClosureVariablesTransitively;
@@ -77,6 +86,9 @@ public class RawSyntacticInformation {
         this.conditionRefinedArgumentVariables = newMap();
         this.stackVariables = newMap();
         this.functionClosureVariables = newMap();
+        this.variableNameFromFuncAndReg = newMap();
+        this.numberOfWritesToVariablesInFunction = new OccurenceCountingMap();
+        this.numberOfWritesToVariablesInnerFunctions = new OccurenceCountingMap();
         this.functionsWithThisReference = newSet();
         this.functionClosureVariablesTransitively = newMap();
     }
@@ -127,6 +139,30 @@ public class RawSyntacticInformation {
 
     public Map<Function, Set<String>> getFunctionClosureVariables() {
         return functionClosureVariables;
+    }
+
+    public OccurenceCountingMap<Pair<Function, String>> getVariableWritesInFunction() {
+        return numberOfWritesToVariablesInFunction;
+    }
+
+    public OccurenceCountingMap<Pair<Function, String>> getVariableWritesInnerFunction() {
+        return numberOfWritesToVariablesInnerFunctions;
+    }
+
+    public void registerVariableWriteInFunction(Function function, String variableName) {
+        numberOfWritesToVariablesInFunction.count(Pair.make(function, variableName));
+    }
+
+    public void registerVariableWriteInnerFunction(Function function, String variableName) {
+        numberOfWritesToVariablesInnerFunctions.count(Pair.make(function, variableName));
+    }
+
+    public Map<Pair<Function, Integer>, String> getVariableReads() {
+        return variableNameFromFuncAndReg;
+    }
+
+    public void registerVariableRead(Function function, int reg, String variableName) {
+        variableNameFromFuncAndReg.put(Pair.make(function, reg), variableName);
     }
 
     public Set<Function> getFunctionsWithThisReference() {
@@ -224,6 +260,22 @@ public class RawSyntacticInformation {
         @Override
         public boolean isFunctionWithThisReference(Function function) {
             return functionsWithThisReference.contains(function);
+        }
+
+        @Override
+        public int getNumberOfVariableWritesInFunction(Function function, String variableName) {
+            return numberOfWritesToVariablesInFunction.getResult(Pair.make(function, variableName));
+        }
+
+        @Override
+        public int getNumberOfVariableWritesInnerFunction(Function function, String variableName) {
+            return numberOfWritesToVariablesInnerFunctions.getResult(Pair.make(function, variableName));
+        }
+
+        @Override
+        public Optional<String> getVariableNameFromReg(Function function, int reg) {
+            String res = variableNameFromFuncAndReg.get(Pair.make(function, reg));
+            return res != null ? Optional.of(res) : Optional.empty();
         }
 
         @Override

@@ -20,6 +20,8 @@ import dk.brics.tajs.analysis.Conversion;
 import dk.brics.tajs.analysis.Conversion.Hint;
 import dk.brics.tajs.analysis.Exceptions;
 import dk.brics.tajs.analysis.Solver;
+import dk.brics.tajs.flowgraph.jsnodes.BinaryOperatorNode;
+import dk.brics.tajs.flowgraph.jsnodes.UnaryOperatorNode;
 import dk.brics.tajs.lattice.Bool;
 import dk.brics.tajs.lattice.Num;
 import dk.brics.tajs.lattice.ObjectLabel;
@@ -1067,6 +1069,99 @@ public class Operators {
      */
     public static Value xor(Value arg1, Value arg2, Solver.SolverInterface c) {
         return bitwise(BitwiseOp.XOR, arg1, arg2, c);
+    }
+
+    public static Value binop(Value v1, BinaryOperatorNode.Op op, Value v2, Solver.SolverInterface c) {
+        Value v;
+        switch (op) {
+            case ADD:
+                v = add(v1, v2, c); // TODO: test07.js could improve messages if keeping conversions of the two args separate
+                break;
+            case AND:
+                v = and(v1, v2, c);
+                break;
+            case DIV:
+                v = div(v1, v2, c);
+                break;
+            case EQ:
+                v = eq(v1, v2, c);
+                break;
+            case GE:
+                v = ge(v1, v2, c);
+                break;
+            case GT:
+                v = gt(v1, v2, c);
+                break;
+            case IN:
+                v = in(v1, v2, c);
+                break;
+            case INSTANCEOF:
+                v = instof(v1, v2, c);
+                break;
+            case LE:
+                v = le(v1, v2, c);
+                break;
+            case LT:
+                v = lt(v1, v2, c);
+                break;
+            case MUL:
+                v = mul(v1, v2, c);
+                break;
+            case NE:
+                v = neq(v1, v2, c);
+                break;
+            case OR:
+                v = or(v1, v2, c);
+                break;
+            case REM:
+                v = rem(v1, v2, c);
+                break;
+            case SEQ:
+                v = stricteq(v1, v2);
+                break;
+            case SHL:
+                v = shl(v1, v2, c);
+                break;
+            case SHR:
+                v = shr(v1, v2, c);
+                break;
+            case SNE:
+                v = strictneq(v1, v2);
+                break;
+            case SUB:
+                v = sub(v1, v2, c);
+                break;
+            case USHR:
+                v = ushr(v1, v2, c);
+                break;
+            case XOR:
+                v = xor(v1, v2, c);
+                break;
+            default:
+                throw new AnalysisException();
+        }
+        return v;
+    }
+
+    public static Value unop(UnaryOperatorNode.Op op, Value arg, Solver.SolverInterface c) {
+        Value v;
+        switch (op) {
+            case COMPLEMENT:
+                v = complement(arg, c);
+                break;
+            case MINUS:
+                v = uminus(arg, c);
+                break;
+            case NOT:
+                v = not(arg);
+                break;
+            case PLUS:
+                v = uplus(arg, c);
+                break;
+            default:
+                throw new AnalysisException();
+        }
+        return v;
     }
 
     private enum NumericOp {ADD, SUB, MUL, DIV, MOD}

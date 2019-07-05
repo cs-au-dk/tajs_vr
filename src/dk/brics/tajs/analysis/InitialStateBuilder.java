@@ -319,6 +319,9 @@ public class InitialStateBuilder implements IInitialStateBuilder<State, Context,
         // TODO: 15.1 the values of the [[Prototype]] and [[Class]] properties of the global object are implementation-dependent
         s.writeInternalPrototype(global, Value.makeObject(lObjectPrototype)); // Rhino's implementation choice
 
+        // anyBool modelling in value refiner
+        pv.writeProperty(global, "js_value_refiner_debug_top", Value.makeAnyBool());
+
         // 15.1.2 function properties of the global object
         createPrimitiveFunction(global, lFunProto, ECMAScriptObjects.EVAL, "eval", 1, c);
         createPrimitiveFunction(global, lFunProto, ECMAScriptObjects.PARSEINT, "parseInt", 2, c);

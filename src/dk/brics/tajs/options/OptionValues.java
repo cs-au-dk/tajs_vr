@@ -62,6 +62,9 @@ public class OptionValues {
     @Option(name = "-no-modified", usage = "Disable modified flags")
     private boolean noModified;
 
+    @Option(name = "-no-exceptions", usage = "Disable implicit exception flow")
+    private boolean noExceptions;
+
     @Option(name = "-no-gc", usage = "Disable abstract garbage collection")
     private boolean noGc;
 
@@ -294,6 +297,7 @@ public class OptionValues {
         if (noObjectSensitivity != that.noObjectSensitivity) return false;
         if (noRecency != that.noRecency) return false;
         if (noModified != that.noModified) return false;
+        if (noExceptions != that.noExceptions) return false;
         if (noGc != that.noGc) return false;
         if (noLazy != that.noLazy) return false;
         if (noCopyOnWrite != that.noCopyOnWrite) return false;
@@ -370,6 +374,7 @@ public class OptionValues {
         result = 31 * result + (noObjectSensitivity ? 1 : 0);
         result = 31 * result + (noRecency ? 1 : 0);
         result = 31 * result + (noModified ? 1 : 0);
+        result = 31 * result + (noExceptions ? 1 : 0);
         result = 31 * result + (noGc ? 1 : 0);
         result = 31 * result + (noLazy ? 1 : 0);
         result = 31 * result + (noCopyOnWrite ? 1 : 0);
@@ -631,6 +636,10 @@ public class OptionValues {
         noCopyOnWrite = false;
     }
 
+    public void disableNoExceptions() {
+        noExceptions = false;
+    }
+
     public void disableNoGc() {
         noGc = false;
     }
@@ -803,6 +812,10 @@ public class OptionValues {
         noCopyOnWrite = true;
     }
 
+    public void enableNoExceptions() {
+        noExceptions = true;
+    }
+
     public void enableNoGc() {
         noGc = true;
     }
@@ -970,6 +983,10 @@ public class OptionValues {
 
     public boolean isEvalStatistics() {
         return evalStatistics;
+    }
+
+    public boolean isExceptionsDisabled() {
+        return noExceptions;
     }
 
     public boolean isFlowGraphEnabled() {

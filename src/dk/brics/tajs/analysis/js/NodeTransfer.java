@@ -28,6 +28,7 @@ import dk.brics.tajs.analysis.Solver;
 import dk.brics.tajs.analysis.dom.DOMEvents;
 import dk.brics.tajs.analysis.nativeobjects.ECMAScriptObjects;
 import dk.brics.tajs.analysis.nativeobjects.TAJSFunction;
+import dk.brics.tajs.analysis.refinements.WritePropertyRefinement;
 import dk.brics.tajs.flowgraph.AbstractNode;
 import dk.brics.tajs.flowgraph.BasicBlock;
 import dk.brics.tajs.flowgraph.Function;
@@ -60,6 +61,7 @@ import dk.brics.tajs.flowgraph.jsnodes.TypeofNode;
 import dk.brics.tajs.flowgraph.jsnodes.UnaryOperatorNode;
 import dk.brics.tajs.flowgraph.jsnodes.WritePropertyNode;
 import dk.brics.tajs.flowgraph.jsnodes.WriteVariableNode;
+import dk.brics.tajs.lattice.PropertyReadSpecialization;
 import dk.brics.tajs.lattice.Context;
 import dk.brics.tajs.lattice.FreeVariablePartitioning;
 import dk.brics.tajs.lattice.MustEquals;
@@ -75,20 +77,31 @@ import dk.brics.tajs.lattice.UnknownValueResolver;
 import dk.brics.tajs.lattice.Value;
 import dk.brics.tajs.monitoring.IAnalysisMonitoring;
 import dk.brics.tajs.options.Options;
+import dk.brics.tajs.refinement.instantiations.forwards_backwards.RefinerOptions;
 import dk.brics.tajs.solver.BlockAndContext;
 import dk.brics.tajs.solver.CallDependencies;
 import dk.brics.tajs.solver.CallGraph;
 import dk.brics.tajs.solver.CallKind;
 import dk.brics.tajs.solver.NodeAndContext;
+import dk.brics.tajs.solver.refinement.QueryManager;
+import dk.brics.tajs.solver.refinement.RefineQuery;
 import dk.brics.tajs.util.AnalysisException;
+import dk.brics.tajs.util.AnalysisLimitationException;
 import dk.brics.tajs.util.Collectors;
 import dk.brics.tajs.util.Pair;
+import forwards_backwards_api.Formula;
+import forwards_backwards_api.ProgramLocation;
+import forwards_backwards_api.memory.MemoryLocation;
+import forwards_backwards_api.memory.Register;
+import forwards_backwards_api.memory.Variable;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static dk.brics.tajs.util.Collections.addToMapSet;
 import static dk.brics.tajs.util.Collections.newList;
@@ -230,23 +243,7 @@ public class NodeTransfer implements NodeVisitor {
     public void visit(UnaryOperatorNode n) {
         Value arg = c.getState().readRegister(n.getArgRegister());
         arg = UnknownValueResolver.getRealValue(arg, c.getState());
-        Value v;
-        switch (n.getOperator()) {
-            case COMPLEMENT:
-                v = Operators.complement(arg, c);
-                break;
-            case MINUS:
-                v = Operators.uminus(arg, c);
-                break;
-            case NOT:
-                v = Operators.not(arg);
-                break;
-            case PLUS:
-                v = Operators.uplus(arg, c);
-                break;
-            default:
-                throw new AnalysisException();
-        }
+        Value v = Operators.unop(n.getOperator(), arg, c);
         if (v.isNotPresent() && !Options.get().isPropagateDeadFlow()) {
             c.getState().setToBottom();
             return;
@@ -266,11 +263,11 @@ public class NodeTransfer implements NodeVisitor {
         Value arg2 = UnknownValueResolver.getRealValue(c.getState().readRegister(n.getArg2Register()), c.getState());
         Map<AbstractNode, Set<PartitioningQualifier>> partitioningQualifiers = Partitioning.getPartitionQualifiersForBinop(n, arg1, arg2);
         Value v = partitioningQualifiers.isEmpty() ?
-                binop(n, arg1, arg2) :
+                Operators.binop(arg1, n.getOperator(), arg2, c) :
                 PartitionedValue.make(partitioningQualifiers.entrySet().stream().collect(
                         Collectors.toMap(Entry::getKey,
                                 e -> e.getValue().stream().collect(Collectors.toMap(q -> q, q ->
-                                        binop(n, PartitionedValue.getPartition(arg1, e.getKey(), q), PartitionedValue.getPartition(arg2, e.getKey(), q))
+                                        Operators.binop(PartitionedValue.getPartition(arg1, e.getKey(), q), n.getOperator(), PartitionedValue.getPartition(arg2, e.getKey(), q), c)
                                 )))));
         if (v.isNotPresent() && !Options.get().isPropagateDeadFlow()) {
             c.getState().setToBottom();
@@ -280,78 +277,6 @@ public class NodeTransfer implements NodeVisitor {
             c.getState().writeRegister(n.getResultRegister(), v);
             c.getState().getMustReachingDefs().addReachingDef(n.getResultRegister(), n);
         }
-    }
-
-    private Value binop(BinaryOperatorNode n, Value arg1, Value arg2) {
-        Value v;
-        switch (n.getOperator()) {
-            case ADD:
-                v = Operators.add(arg1, arg2, c); // TODO: test07.js could improve messages if keeping conversions of the two args separate
-                break;
-            case AND:
-                v = Operators.and(arg1, arg2, c);
-                break;
-            case DIV:
-                v = Operators.div(arg1, arg2, c);
-                break;
-            case EQ:
-                v = Operators.eq(arg1, arg2, c);
-                break;
-            case GE:
-                v = Operators.ge(arg1, arg2, c);
-                break;
-            case GT:
-                v = Operators.gt(arg1, arg2, c);
-                break;
-            case IN:
-                v = Operators.in(arg1, arg2, c);
-                break;
-            case INSTANCEOF:
-                v = Operators.instof(arg1, arg2, c);
-                break;
-            case LE:
-                v = Operators.le(arg1, arg2, c);
-                break;
-            case LT:
-                v = Operators.lt(arg1, arg2, c);
-                break;
-            case MUL:
-                v = Operators.mul(arg1, arg2, c);
-                break;
-            case NE:
-                v = Operators.neq(arg1, arg2, c);
-                break;
-            case OR:
-                v = Operators.or(arg1, arg2, c);
-                break;
-            case REM:
-                v = Operators.rem(arg1, arg2, c);
-                break;
-            case SEQ:
-                v = Operators.stricteq(arg1, arg2);
-                break;
-            case SHL:
-                v = Operators.shl(arg1, arg2, c);
-                break;
-            case SHR:
-                v = Operators.shr(arg1, arg2, c);
-                break;
-            case SNE:
-                v = Operators.strictneq(arg1, arg2);
-                break;
-            case SUB:
-                v = Operators.sub(arg1, arg2, c);
-                break;
-            case USHR:
-                v = Operators.ushr(arg1, arg2, c);
-                break;
-            case XOR:
-                v = Operators.xor(arg1, arg2, c);
-                break;
-            default:
-                throw new AnalysisException();
-        }
-        return v;
     }
 
     /**
@@ -377,6 +302,34 @@ public class NodeTransfer implements NodeVisitor {
                 // if varname is a free variable with partitioned value, then refine using the context
                 v = Partitioning.getVariableValueFromPartition(varname, v, c);
             }
+            Set<String> closureVariableNames = c.getFlowGraph().getSyntacticInformation().getClosureVariableNames(n.getBlock().getFunction());
+            boolean isClosureVariable = closureVariableNames != null && closureVariableNames.contains(varname);
+            if (c.getState().getContext().getPropertyReadSpecialization() != null && isClosureVariable) {
+                v = UnknownValueResolver.getRealValue(v, c.getState());
+                PropertyReadSpecialization propertyReadSpecialization = c.getState().getContext().getPropertyReadSpecialization();
+                if (propertyReadSpecialization.getMemoryLocation() instanceof Variable) {
+                    if (((Variable) propertyReadSpecialization.getMemoryLocation()).getName().equals(varname)) {
+                        v = propertyReadSpecialization.getPropName().get();
+                    }
+                }
+
+                if (v.getObjectLabels().stream().filter(obj -> obj.getKind() == Kind.FUNCTION).map(obje -> obje.getSourceLocation()).distinct().collect(Collectors.toSet()).size() > 1) {
+                    QueryManager.MultiQueryManager<Formula> qm = QueryManager.MultiQueryManager.getInstance();
+                    if (!propertyReadSpecialization.getPropName().isPresent()) {
+                        throw new AnalysisLimitationException.AnalysisPrecisionLimitationException("Should have a precise propertyname at: " + n.getSourceLocation());
+                    }
+                    Formula constraint = !propertyReadSpecialization.getMemoryLocation().equals(new Register(-1)) ? // The memoryLocation is -1, if specialization happened at fixed property write
+                            qm.getRefiner().mkEqualityConstraint(propertyReadSpecialization.getMemoryLocation(), propertyReadSpecialization.getPropName().get())
+                            : qm.getRefiner().mkTrueConstraint();
+
+                    Function functionThatDefinesClosureVariable = getFunctionDefiningVariable(n.getBlock().getFunction(), varname);
+                    RefineQuery<Formula> query = new RefineQuery<>(new Variable(varname, functionThatDefinesClosureVariable), constraint, UnknownValueResolver.getRealValue(v, c.getState()));
+
+                    ProgramLocation queryLocation = propertyReadSpecialization.getProgramLocation();
+                    Collection<Value> queryResult = qm.getRefinerManager().getQueryResult(queryLocation, query);
+                    v = Value.join(queryResult);
+                }
+            }
             m.visitPropertyRead(n, base_objs, Value.makeTemporaryStr(varname), c.getState(), true);
             m.visitVariableAsRead(n, varname, v, c.getState());
             m.visitVariableOrProperty(n, varname, n.getSourceLocation(), v, c.getState().getContext(), c.getState());
@@ -401,6 +354,14 @@ public class NodeTransfer implements NodeVisitor {
             c.getState().getMustReachingDefs().addReachingDef(n.getResultRegister(), n);
             c.getState().getMustEquals().addMustEquals(n.getResultRegister(), MustEquals.getSingleton(base_objs), StringPKey.make(varname));
         }
+    }
+
+    private Function getFunctionDefiningVariable(Function f, String varname) {
+        Function currentFunctionScope = f;
+        while (!(currentFunctionScope.getParameterNames().contains(varname) || currentFunctionScope.getVariableNames().contains(varname))) {
+            currentFunctionScope = currentFunctionScope.getOuterFunction();
+        }
+        return currentFunctionScope;
     }
 
     /**
@@ -581,10 +542,6 @@ public class NodeTransfer implements NodeVisitor {
             }
             Value originalPVal = pval;
             pval = pval.restrictToNotNullNotUndef().restrictToNotNaN().restrictToNotSymbol();
-            Value propertystr = Conversion.toString(pval, c).join(Value.makeObject(symbols));
-            if ((propertystr.isNone() && !maybe_undef && !maybe_null && !maybe_nan) && !Options.get().isPropagateDeadFlow()) { // TODO: maybe need more aborts like this one?
-                continue;
-            }
             switch (n.getKind()) {
                 case GETTER:
                     v = v.makeGetter();
@@ -598,32 +555,187 @@ public class NodeTransfer implements NodeVisitor {
                 default:
                     throw new AnalysisException("Unexpected case: " + n.getKind());
             }
+            Value propertystr = Conversion.toString(pval, c).join(Value.makeObject(symbols));
+            if ((propertystr.isNone() && !maybe_undef && !maybe_null && !maybe_nan) && !Options.get().isPropagateDeadFlow()) { // TODO: maybe need more aborts like this one?
+                continue;
+            }
+
             Value finalV = PartitionedValue.ignorePartitions(v);
-            if (!Partitioning.usePartitionedWriteProperty(propertystr, v)) { // not using value partitioning
-                // write the object property value, and separately for "undefined"/"null"/"NaN"
-                if (!propertystr.isNone())
-                    pt.add(() -> pv.writeProperty(objlabels, propertystr, finalV, false, n.isDecl()));
-                if (maybe_undef && !propertystr.isMaybeStr("undefined"))
-                    pt.add(() -> pv.writeProperty(objlabels, Value.makeTemporaryStr("undefined"), finalV, false, n.isDecl()));
-                if (maybe_null && !propertystr.isMaybeStr("null"))
-                    pt.add(() -> pv.writeProperty(objlabels, Value.makeTemporaryStr("null"), finalV, false, n.isDecl()));
-                if (maybe_nan && !propertystr.isMaybeStr("NaN"))
-                    pt.add(() -> pv.writeProperty(objlabels, Value.makeTemporaryStr("NaN"), finalV, false, n.isDecl()));
-            } else { // using value partitioning
-                Value propertystrall = propertystr;
-                if (maybe_undef || maybe_null || maybe_nan)
-                    propertystrall = Partitioning.joinUndefNullNaNStrings((PartitionedValue) originalPVal, (PartitionedValue) propertystr);
-                Partitioning.writePropertyWithPartitioning(pt, objlabels, propertystrall, v, n, c, pv);
+            boolean doNotUseRefinementAtWrite = n.isPropertyFixed() || n.getKind() != WritePropertyNode.Kind.ORDINARY ||
+                    !RefinerOptions.get().isWritePropertyRefineEnabled() || !propertystr.isMaybeStrIdentifier();
+            if (doNotUseRefinementAtWrite && !RefinerOptions.get().isSpecializeImpreciseClosureVariablesWithOnlyOneWrite()) {
+                // no refinement or specialization
+                if (!Partitioning.usePartitionedWriteProperty(propertystr, v)) { // not using value partitioning
+                    if (!RefinerOptions.get().isSpecializeImpreciseClosureVariablesWithOnlyOneWrite()) {
+                        // write the object property value, and separately for "undefined"/"null"/"NaN"
+                        if (!propertystr.isNone())
+                            pt.add(() -> pv.writeProperty(objlabels, propertystr, finalV, false, n.isDecl()));
+                        if (maybe_undef && !propertystr.isMaybeStr("undefined"))
+                            pt.add(() -> pv.writeProperty(objlabels, Value.makeTemporaryStr("undefined"), finalV, false, n.isDecl()));
+                        if (maybe_null && !propertystr.isMaybeStr("null"))
+                            pt.add(() -> pv.writeProperty(objlabels, Value.makeTemporaryStr("null"), finalV, false, n.isDecl()));
+                        if (maybe_nan && !propertystr.isMaybeStr("NaN"))
+                            pt.add(() -> pv.writeProperty(objlabels, Value.makeTemporaryStr("NaN"), finalV, false, n.isDecl()));
+                    } else {
+
+                    }
+                } else { // using value partitioning
+                    Value propertystrall = propertystr;
+                    if (maybe_undef || maybe_null || maybe_nan)
+                        propertystrall = Partitioning.joinUndefNullNaNStrings((PartitionedValue) originalPVal, (PartitionedValue) propertystr);
+                    Partitioning.writePropertyWithPartitioning(pt, objlabels, propertystrall, v, n, c, pv);
+                }
+                m.visitPropertyWrite(n, objlabels, propertystr); // TODO: more monitoring around here?
+                if (Options.get().isEvalStatistics()
+                        && propertystr.isMaybeSingleStr()
+                        && propertystr.getStr().equals("innerHTML")) {
+                    m.visitInnerHTMLWrite(n, v);
+                }
+                m.visitVariableOrProperty(n, n.getPropertyString(), n.getSourceLocation(), v, c.getState().getContext(), c.getState());
+            } else {
+                // do refinement or specialization
+                Collection<Value> refinedValues = doNotUseRefinementAtWrite ? singleton(finalV) : splitValue(UnknownValueResolver.getRealValue(finalV, c.getState()));
+                Set<Value> finalPropnameValues = singleton(propertystr.join(Value.makeObject(symbols)));
+                if (maybe_undef)
+                    finalPropnameValues.add(Value.makeStr("undefined"));
+                if (maybe_nan)
+                    finalPropnameValues.add(Value.makeStr("NaN"));
+                if (maybe_null)
+                    finalPropnameValues.add(Value.makeStr("null"));
+                for (Value refinedValue : refinedValues) {
+                    Value specializedValue = refinedValues.size() < 5 ?
+                            specializeFunctionsWithFreeVariables(n, objlabels, finalPropnameValues, refinedValue, pt, !doNotUseRefinementAtWrite) :
+                            refinedValue;
+                    if (!specializedValue.equals(refinedValue)) {
+                        if (!specializedValue.isNone())
+                            finalPropnameValues.forEach(propname -> pt.add(() -> writePropertyNodeWrite(n, objlabels, propname, specializedValue)));
+                    } else {
+                        // No specialization
+                        Value resolvedFinalV = UnknownValueResolver.getRealValue(finalV, c.getState());
+                        Collection<Value> refinedPropNames;
+                        if (doNotUseRefinementAtWrite) {
+                            refinedPropNames = finalPropnameValues;
+                        } else {
+                            refinedPropNames = propertystr.isMaybeFuzzyStr() && !resolvedFinalV.getObjectLabels().isEmpty() &&
+                                    ((refinedValues.size() > 2)
+                                            || (refinedValues.size() > 1 && !refinedValues.stream().anyMatch(v1 -> v1.restrictToNotUndef().isNone())))
+                                    ? WritePropertyRefinement.getPropertyName(Value.join(finalPropnameValues), null, refinedValue, n, c.getState()) : finalPropnameValues;
+                        }
+                        for (Value refinedPropname : refinedPropNames) {
+                            pt.add(() -> writePropertyNodeWrite(n, objlabels, refinedPropname, refinedValue));
+                        }
+                    }
+                }
             }
-            m.visitPropertyWrite(n, objlabels, propertystr); // TODO: more monitoring around here?
-            if (Options.get().isEvalStatistics()
-                    && propertystr.isMaybeSingleStr()
-                    && propertystr.getStr().equals("innerHTML")) {
-                m.visitInnerHTMLWrite(n, v);
-            }
-            m.visitVariableOrProperty(n, n.getPropertyString(), n.getSourceLocation(), v, c.getState().getContext(), c.getState());
         }
         pt.complete();
+    }
+
+    private Value specializeFunctionsWithFreeVariables(WritePropertyNode n, Set<ObjectLabel> finalBaseObjs, Set<Value> coercedSplitPropNames, Value v, ParallelTransfer pt, boolean refinementHeuristicTriggered) {
+        if (!RefinerOptions.get().isSpecializeImpreciseClosureVariablesWithOnlyOneWrite() || c.getFlowGraph().isHostEnvironmentSource(n.getSourceLocation())) {
+            // Do not specialize
+            return v;
+        }
+        Value valueNotSpecialized = v;
+        for (Value partitionedValue : splitValue(UnknownValueResolver.getRealValue(v, c.getState()))) {
+            Set<Pair<Function, String>> impreciseClosureVariableNames = partitionedValue.getObjectLabels().stream()
+                    .filter(obj -> obj.getKind() == Kind.FUNCTION && !obj.isHostObject())
+                    .flatMap(obj -> {
+                        Set<String> closureVariableNamesForFunction = c.getFlowGraph().getSyntacticInformation().getClosureVariableNames(obj.getFunction());
+                        if (closureVariableNamesForFunction == null) {
+                            return Stream.empty();
+                        }
+                        Collection<State> states = c.getAnalysisLatticeElement().getStates(obj.getFunction().getNode().getBlock()).values();
+
+                        Set<Pair<Function, String>> impreciseClosureVariableNamesInner = newSet();
+                        for (String varname : closureVariableNamesForFunction) {
+                            for (State s : states) {
+                                if (s.readVariableDirect(varname).getObjectLabels().stream().anyMatch(obj2 -> obj2.getKind() == Kind.FUNCTION)) {
+                                    impreciseClosureVariableNamesInner.add(Pair.make(getFunctionDefiningVariable(obj.getFunction(), varname), varname));
+                                }
+                            }
+                        }
+                        return impreciseClosureVariableNamesInner.stream();
+                    })
+                    .collect(Collectors.toSet());
+
+            if (!impreciseClosureVariableNames.isEmpty()) {
+                Pair<Function, String> functionAndString = impreciseClosureVariableNames.iterator().next(); //One element
+                String impreciseClosureVariableName = functionAndString.getSecond();
+                Function functionDefininingClosure = functionAndString.getFirst();
+                int numberWritesToVariableFromVarDefScope = c.getFlowGraph().getSyntacticInformation().getNumberOfVariableWritesInFunction(functionDefininingClosure, impreciseClosureVariableName);
+                int numberWritesToVariableFromInnerFunctions = c.getFlowGraph().getSyntacticInformation().getNumberOfVariableWritesInnerFunction(functionDefininingClosure, impreciseClosureVariableName);
+                if (((functionDefininingClosure.getVariableNames().contains(impreciseClosureVariableName) && numberWritesToVariableFromVarDefScope == 1 && numberWritesToVariableFromInnerFunctions == 0)
+                        || (functionDefininingClosure.getParameterNames().contains(impreciseClosureVariableName) && numberWritesToVariableFromVarDefScope == 0 && numberWritesToVariableFromInnerFunctions == 0))
+                        && (refinementHeuristicTriggered || !functionDefininingClosure.equals(n.getBlock().getFunction()))) { //When only one write it is sound to
+
+                    for (ObjectLabel objectLabel : partitionedValue.getObjectLabels()) {
+                        if (objectLabel.getKind() != Kind.FUNCTION || objectLabel.getPropertyReadSpecialization() != null) {
+                            continue;
+                        }
+                        ProgramLocation programLocation = new ProgramLocation(n, c.getState().getContext());
+                        Optional<String> propertyVariableName = c.getFlowGraph().getSyntacticInformation().getVariableNameFromReg(n.getBlock().getFunction(), n.getPropertyRegister());
+
+                        MemoryLocation memoryLocation = null;
+                        if (propertyVariableName.isPresent()) {
+                            int numberWritesToPropVarFromVarDefScope = c.getFlowGraph().getSyntacticInformation().getNumberOfVariableWritesInFunction(n.getBlock().getFunction(), propertyVariableName.get());
+                            int numberWritesToPropVarFromInnerFunctions = c.getFlowGraph().getSyntacticInformation().getNumberOfVariableWritesInnerFunction(n.getBlock().getFunction(), propertyVariableName.get());
+                            if ((n.getBlock().getFunction().getVariableNames().contains(propertyVariableName.get()) && numberWritesToPropVarFromVarDefScope == 1 && numberWritesToPropVarFromInnerFunctions == 0)
+                                    || (n.getBlock().getFunction().getParameterNames().contains(propertyVariableName.get()) && numberWritesToPropVarFromVarDefScope == 0 && numberWritesToPropVarFromInnerFunctions == 0)) { //When only one write it is sound to
+                                memoryLocation = new Variable(propertyVariableName.get(), n.getBlock().getFunction());
+                            }
+                        }
+                        if (memoryLocation == null) {
+                            memoryLocation = new Register(n.getPropertyRegister());
+                        }
+                        valueNotSpecialized = UnknownValueResolver.getRealValue(valueNotSpecialized, c.getState()).removeObjects(singleton(objectLabel));
+                        ObjectLabel specializedObjectLabel = objectLabel.makeSpecialization(new PropertyReadSpecialization(programLocation, memoryLocation, n.isPropertyFixed() ? Optional.of(Value.makeStr(n.getPropertyString())) : Optional.empty()));
+                        c.getState().addSpecialization(objectLabel, specializedObjectLabel);
+                        c.getState().propagateObj(specializedObjectLabel, c.getState(), objectLabel, true, false);
+                        coercedSplitPropNames.forEach(propname -> pt.add(() -> writePropertyNodeWrite(n, finalBaseObjs, propname, Value.makeObject(specializedObjectLabel))));
+                    }
+                }
+            }
+        }
+        return valueNotSpecialized;
+    }
+
+    private void writePropertyNodeWrite(WritePropertyNode n, Set<ObjectLabel> objlabels, Value propname, Value vi) {
+        pv.writeProperty(objlabels, propname, vi, false, n.isDecl());
+        m.visitPropertyWrite(n, objlabels, propname);
+        if (Options.get().isEvalStatistics()
+                && propname.getStr() != null
+                && propname.getStr().equals("innerHTML")) {
+            m.visitInnerHTMLWrite(n, vi);
+        }
+        m.visitVariableOrProperty(n, n.getPropertyString(), n.getSourceLocation(), vi, c.getState().getContext(), c.getState());
+    }
+
+    private Set<Value> splitValue(Value v) {
+        Set<Value> res = newSet();
+        // objects as singletons
+        v.getObjectLabels().forEach(obj -> res.add(Value.makeObject(obj)));
+        // primitive number
+        if (!v.isNotNum()) {
+            res.add(v.restrictToNum());
+        }
+        // primitive boolean
+        if (!v.isNotBool()) {
+            res.add(v.restrictToBool());
+        }
+        // primitive string
+        if (!v.isNotStr()) {
+            res.add(v.restrictToStr());
+        }
+        // null
+        if (!v.isNotNull()) {
+            res.add(Value.makeNull());
+        }
+        // undefined
+        if (!v.isNotUndef()) {
+            res.add(Value.makeUndef());
+        }
+        return res;
     }
 
     /**

@@ -21,6 +21,7 @@ import dk.brics.tajs.flowgraph.AbstractNode;
 import dk.brics.tajs.flowgraph.Function;
 import dk.brics.tajs.flowgraph.jsnodes.CallNode;
 
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -85,6 +86,21 @@ public interface SyntacticQueries {
      * True iff the function has an occurence of 'this'.
      */
     boolean isFunctionWithThisReference(Function function);
+
+    /**
+     * Returns the number of writes to variableName in closure functions.
+     */
+    int getNumberOfVariableWritesInFunction(Function function, String variableName);
+
+    /**
+     * Returns the number of writes to variableName in closure functions.
+     */
+    int getNumberOfVariableWritesInnerFunction(Function function, String variableName);
+
+    /**
+     * Returns the variable name that corresponds to the reg in function
+     */
+    Optional<String> getVariableNameFromReg(Function function, int reg);
 
     /**
      * The set of free variables of a function that are bound in an outer function (closure variables) - includes variables used in functions defined inside fun.

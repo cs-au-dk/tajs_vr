@@ -61,6 +61,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 
@@ -71,7 +72,9 @@ import static dk.brics.tajs.js2flowgraph.FunctionBuilderHelper.makeSourceLocatio
 import static dk.brics.tajs.js2flowgraph.FunctionBuilderHelper.makeSuccessorBasicBlock;
 import static dk.brics.tajs.js2flowgraph.FunctionBuilderHelper.setupFunction;
 import static dk.brics.tajs.util.Collections.newList;
+import static dk.brics.tajs.util.Collections.newMap;
 import static dk.brics.tajs.util.Collections.newSet;
+import static dk.brics.tajs.util.Collections.singleton;
 import static org.apache.log4j.Logger.getLogger;
 
 /**
@@ -120,6 +123,40 @@ public class FlowGraphBuilder {
         processed = TranslationResult.makeAppendBlock(initialEnv.getAppendBlock());
         syntacticInformation = new RawSyntacticInformation();
         valueLogMappingInformation = new ValueLogLocationInformation();
+    }
+
+    /**
+     * Computes the backwards flowgraph for a function, a map from a node to its predecessors.
+     */
+    public static Map<AbstractNode, Set<AbstractNode>> makeNodePredecessorMap(Function function) {
+        // TODO merge with the dk.brics.tajs.analysis.uneval.Decorator.Decorator()
+        Map<BasicBlock, Set<BasicBlock>> predecessorBlocks = newMap();
+        for (BasicBlock predecessor : function.getBlocks()) {
+            for (BasicBlock successor : predecessor.getSuccessors()) {
+                predecessorBlocks.putIfAbsent(successor, newSet());
+                predecessorBlocks.get(successor).add(predecessor);
+            }
+        }
+
+        Map<AbstractNode, Set<AbstractNode>> predecessorNodes = newMap();
+        for (BasicBlock basicBlock : function.getBlocks()) {
+            AbstractNode previous = null;
+            for (AbstractNode node : basicBlock.getNodes()) {
+                Set<AbstractNode> predecessors;
+                if (node == basicBlock.getFirstNode()) {
+                    predecessors = newSet(
+                            predecessorBlocks.getOrDefault(basicBlock, newSet()).stream()
+                                    .map(BasicBlock::getLastNode)
+                                    .collect(java.util.stream.Collectors.toSet())
+                    );
+                } else {
+                    predecessors = singleton(previous);
+                }
+                predecessorNodes.put(node, predecessors);
+                previous = node;
+            }
+        }
+        return predecessorNodes;
     }
 
     /**

@@ -100,7 +100,7 @@ public class CustomContextSensitivityStrategy implements IContextSensitivityStra
     public Context makeFunctionEntryContext(State state, ObjectLabel function, FunctionCalls.CallInfo callInfo, Solver.SolverInterface c) {
         Context functionContext = makeContextArguments(state, function, state.getExecutionContext().getThis(), callInfo);
         if (functionContext != null) {
-            return functionContext;
+            return Context.make(functionContext.getThisVal(), functionContext.getSpecialRegisters(), null, functionContext.getExtraAllocationContexts(), functionContext.getLoopUnrolling(), functionContext.getUnknownArg(), functionContext.getParameterNames(), functionContext.getArguments(), functionContext.getFreeVariables(), functionContext.getFreeVariablePartitioning(), function.getPropertyReadSpecialization());
         }
         return defaultContextSensitivity.makeFunctionEntryContext(state, function, callInfo, c);
     }

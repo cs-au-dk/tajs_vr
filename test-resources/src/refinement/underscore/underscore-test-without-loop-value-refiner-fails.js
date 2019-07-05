@@ -6,6 +6,6 @@ var fun = function(name) {
     objA[name] = objB.foo;
 };
 
-var anyString = thresher_debug_top ? "foo" : "bar";
+var anyString = js_value_refiner_debug_top ? "foo" : "bar";
 
 fun(anyString);

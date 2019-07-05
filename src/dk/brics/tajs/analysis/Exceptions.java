@@ -42,6 +42,8 @@ public class Exceptions {
      * Don't forget to set the ordinary state to none if the exception will definitely occur.
      */
     public static void throwTypeError(Solver.SolverInterface c) {
+        if (Options.get().isExceptionsDisabled())
+            return;
         if (Options.get().getUnsoundness().isNoExceptions()) {
             c.getAnalysis().getUnsoundness().ignoringException(c.getNode(), "TypeError");
             return;
@@ -56,6 +58,8 @@ public class Exceptions {
      * Don't forget to set the ordinary state to none if the exception will definitely occur.
      */
     public static void throwReferenceError(Solver.SolverInterface c, boolean maybe) {
+        if (Options.get().isExceptionsDisabled())
+            return;
         if (maybe && Options.get().getUnsoundness().isNoExceptions()) {
             c.getAnalysis().getUnsoundness().ignoringException(c.getNode(), "ReferenceError");
             return;
@@ -70,6 +74,8 @@ public class Exceptions {
      * Don't forget to set the ordinary state to none if the exception will definitely occur.
      */
     public static void throwRangeError(Solver.SolverInterface c, boolean maybe) {
+        if (Options.get().isExceptionsDisabled())
+            return;
         if (maybe && Options.get().getUnsoundness().isNoExceptions()) {
             c.getAnalysis().getUnsoundness().ignoringException(c.getNode(), "RangeError");
             return;
@@ -84,6 +90,8 @@ public class Exceptions {
      * Don't forget to set the ordinary state to none if the exception will definitely occur.
      */
     public static void throwSyntaxError(Solver.SolverInterface c, boolean maybe) {
+        if (Options.get().isExceptionsDisabled())
+            return;
         if (maybe && Options.get().getUnsoundness().isNoExceptions()) {
             c.getAnalysis().getUnsoundness().ignoringException(c.getNode(), "SyntaxError");
             return;

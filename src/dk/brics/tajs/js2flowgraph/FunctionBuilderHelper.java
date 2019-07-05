@@ -38,9 +38,12 @@ import dk.brics.tajs.flowgraph.jsnodes.EndLoopNode;
 import dk.brics.tajs.flowgraph.jsnodes.EndWithNode;
 import dk.brics.tajs.flowgraph.jsnodes.ExceptionalReturnNode;
 import dk.brics.tajs.flowgraph.jsnodes.IfNode;
+import dk.brics.tajs.flowgraph.jsnodes.ReadPropertyNode;
 import dk.brics.tajs.flowgraph.jsnodes.ReturnNode;
 import dk.brics.tajs.flowgraph.jsnodes.ThrowNode;
 import dk.brics.tajs.flowgraph.jsnodes.UnaryOperatorNode;
+import dk.brics.tajs.flowgraph.jsnodes.WritePropertyNode;
+import dk.brics.tajs.refinement.instantiations.forwards_backwards.RefinerOptions;
 import dk.brics.tajs.util.AnalysisException;
 import dk.brics.tajs.util.Pair;
 
@@ -379,6 +382,11 @@ public class FunctionBuilderHelper {
      * Checks whether the given node is of a kind that requires its own basic block.
      */
     public static boolean requiresOwnBlock(AbstractNode n) {
+        if (RefinerOptions.get().isWritePropertyRefineEnabled()) {
+            if (n instanceof ReadPropertyNode || n instanceof WritePropertyNode) {
+                return true;
+            }
+        }
         return (n instanceof ThrowNode
                 || n instanceof CallNode
                 || n instanceof ExceptionalReturnNode

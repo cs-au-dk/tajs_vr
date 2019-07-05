@@ -20,6 +20,7 @@ import dk.brics.tajs.analysis.dom.DOMObjects;
 import dk.brics.tajs.analysis.js.UserFunctionCalls;
 import dk.brics.tajs.flowgraph.AbstractNode;
 import dk.brics.tajs.flowgraph.BasicBlock;
+import dk.brics.tajs.refinement.instantiations.forwards_backwards.RefinerOptions;
 import dk.brics.tajs.lattice.Bool;
 import dk.brics.tajs.lattice.ExecutionContext;
 import dk.brics.tajs.lattice.FreeVariablePartitioning;
@@ -31,6 +32,7 @@ import dk.brics.tajs.lattice.PKey.StringPKey;
 import dk.brics.tajs.lattice.PKey.SymbolPKey;
 import dk.brics.tajs.lattice.PKeys;
 import dk.brics.tajs.lattice.Property;
+import dk.brics.tajs.lattice.PropertyReadSpecialization;
 import dk.brics.tajs.lattice.ScopeChain;
 import dk.brics.tajs.lattice.State;
 import dk.brics.tajs.lattice.Str;
@@ -46,6 +48,7 @@ import org.apache.log4j.Logger;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.Optional;
 import java.util.Set;
 
 import static dk.brics.tajs.analysis.InitialStateBuilder.GLOBAL;
@@ -127,8 +130,33 @@ public class PropVarOperations {
         v = v.setBottomPropertyData();
         if (log.isDebugEnabled())
             log.debug("readPropertyValue(" + objlabels + "," + propertystr + ") = " + v);
+        if (RefinerOptions.get().isSpecializeImpreciseClosureVariablesWithOnlyOneWrite()) {
+            v = specializeValueAtRead(v, Value.canonicalize((Value) propertystr)); //TODO: casting to Value
+        }
         return v;
     }
+
+    private Value specializeValueAtRead(Value v, Value propName) {
+        v = UnknownValueResolver.getRealValue(v, c.getState());
+        Value res = v.restrictToNotObject();
+        for (ObjectLabel objectLabel : v.getObjectLabels()) {
+            PropertyReadSpecialization propertyReadSpecialization = objectLabel.getPropertyReadSpecialization();
+            if (objectLabel.getKind() == ObjectLabel.Kind.FUNCTION
+                    && propertyReadSpecialization != null
+                    && !propertyReadSpecialization.getPropName().isPresent()) {
+                PropertyReadSpecialization newPropertyReadSpecialization =
+                        new PropertyReadSpecialization(propertyReadSpecialization.getProgramLocation(), propertyReadSpecialization.getMemoryLocation(), Optional.of(propName));
+                ObjectLabel specializedObjectLabel = objectLabel.makeSpecialization(newPropertyReadSpecialization);
+                c.getState().propagateObj(specializedObjectLabel, c.getState(), objectLabel, true, false);
+                res = res.joinObject(specializedObjectLabel);
+                c.getState().addSpecialization(c.getState().getGeneralization(objectLabel), specializedObjectLabel);
+            } else {
+                res = res.joinObject(objectLabel);
+            }
+        }
+        return res;
+    }
+
 
     /**
      * Returns the value of the given property in the given objects.
@@ -583,6 +611,29 @@ public class PropVarOperations {
      */
     private void writeProperty(ObjectProperty objprop, Value value,
                                boolean process_attributes, boolean value_has_attributes, boolean set_modified, boolean allow_overwrite, boolean force_weak, boolean not_invoke_setters) {
+        actualWriteProperty(objprop, value, process_attributes, value_has_attributes, set_modified, allow_overwrite, force_weak, not_invoke_setters);
+        if (c.getState().isBottom())
+            return;
+        ObjectLabel generalization = c.getState().getGeneralization(objprop.getObjectLabel());
+        if (generalization != null)
+            actualWriteWithBottomCheck(objprop.makeRenamed(generalization), value, process_attributes, value_has_attributes, set_modified, allow_overwrite, true, not_invoke_setters);
+
+        for (ObjectLabel objectLabel : c.getState().getSpecializations(objprop.getObjectLabel())) {
+            actualWriteWithBottomCheck(objprop.makeRenamed(objectLabel), value, process_attributes, value_has_attributes, set_modified, allow_overwrite, true, not_invoke_setters);
+        }
+    }
+
+    private void actualWriteWithBottomCheck(ObjectProperty objprop, Value value,
+                                            boolean process_attributes, boolean value_has_attributes, boolean set_modified, boolean allow_overwrite, boolean force_weak, boolean not_invoke_setters) {
+        State oldState = c.getState().clone();
+        actualWriteProperty(objprop, value, process_attributes, value_has_attributes, set_modified, allow_overwrite, force_weak, not_invoke_setters);
+        if (c.getState().isBottom()) {
+            c.setState(oldState);
+        }
+    }
+
+    private void actualWriteProperty(ObjectProperty objprop, Value value,
+                                     boolean process_attributes, boolean value_has_attributes, boolean set_modified, boolean allow_overwrite, boolean force_weak, boolean not_invoke_setters) {
         State state = c.getState();
         final Value origValue = value; // keep the given value for setters
         Value oldvalue = UnknownValueResolver.getValue(objprop, state, true);

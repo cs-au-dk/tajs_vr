@@ -20,8 +20,11 @@ import dk.brics.tajs.flowgraph.AbstractNode;
 import dk.brics.tajs.flowgraph.BasicBlock;
 import dk.brics.tajs.flowgraph.FlowGraph;
 import dk.brics.tajs.flowgraph.Function;
+import dk.brics.tajs.lattice.Context;
+import dk.brics.tajs.monitoring.refinement.RefinerStatistics;
 import dk.brics.tajs.options.Options;
 import dk.brics.tajs.solver.IAnalysisLatticeElement.MergeResult;
+import dk.brics.tajs.solver.refinement.QueryManager;
 import dk.brics.tajs.util.AnalysisException;
 import dk.brics.tajs.util.AnalysisLimitationException;
 import net.htmlparser.jericho.Source;
@@ -30,6 +33,7 @@ import org.apache.log4j.Logger;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -242,6 +246,10 @@ public class GenericSolver<StateType extends IState<StateType, ContextType, Call
             if (cg.addTarget(call_node, caller_context, callee_entry, edge_context, edge_state, sync, analysis, c.getMonitoring())) {
                 // new flow at call edge, transform it relative to the function entry states and contexts
                 cg.addSource(call_node, caller_context, callee_entry, callee_context, edge_context);
+                if (getQueryManager() != null) {
+                    Set<BlockAndContext> toReprocess = getQueryManager().checkAssumptions(callee_entry.getFirstNode(), (Context) callee_context); //TODO generics
+                    toReprocess.forEach(bAndC -> c.addToWorklist(bAndC.getBlock(), (ContextType) bAndC.getContext()));
+                }
                 // propagate transformed state into function entry
                 propagateAndUpdateWorklist(edge_state, callee_entry, callee_context, true);
                 if (deps.isFunctionActive(new BlockAndContext<>(callee_entry, callee_context))) {
@@ -331,6 +339,7 @@ public class GenericSolver<StateType extends IState<StateType, ContextType, Call
      */
     public void solve() {
         String terminatedEarly = null;
+        RefinerStatistics.get().beginDataflowPhase();
         try {
             // iterate until fixpoint
             block_loop:
@@ -399,6 +408,10 @@ public class GenericSolver<StateType extends IState<StateType, ContextType, Call
                             } finally {
                                 analysis.getMonitoring().visitNodeTransferPost(current_node, current_state);
                             }
+                            if (getQueryManager() != null) {
+                                Set<BlockAndContext> toReprocess = QueryManager.MultiQueryManager.getInstance().checkAssumptions(n, (Context) context); //TODO generics
+                                toReprocess.forEach(bAndC -> c.addToWorklist(bAndC.getBlock(), (ContextType) bAndC.getContext()));
+                            }
                             if (current_state.isBottom()) {
                                 log.debug("No non-exceptional flow");
                                 continue block_loop;
@@ -434,6 +447,7 @@ public class GenericSolver<StateType extends IState<StateType, ContextType, Call
         } else {
             deps.assertEmpty();
         }
+        RefinerStatistics.get().endDataflowPhase();
     }
 
     /**
@@ -487,6 +501,13 @@ public class GenericSolver<StateType extends IState<StateType, ContextType, Call
                 }
             }
         }
+    }
+
+    /**
+     * Returns the QueryManager used for refinements
+     */
+    private QueryManager.MultiQueryManager getQueryManager() {
+        return QueryManager.MultiQueryManager.getInstance();
     }
 
     /**

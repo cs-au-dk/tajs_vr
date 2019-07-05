@@ -1,8 +1,8 @@
 [submodule "extras/jalangilogger"]
 	path = extras/jalangilogger
-	url = ../jalangilogger.git
+	url = https://github.com/cs-au-dk/jalangilogger.git
 	branch = master
 [submodule "extras/inspector"]
 	path = extras/inspector
-	url = ../TAJS-Inspector.git
+	url = https://github.com/cs-au-dk/TAJS-Inspector.git
 	branch = master
